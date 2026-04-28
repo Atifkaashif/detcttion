@@ -1,72 +1,62 @@
 import streamlit as st
 from ultralytics import YOLO
-from PIL import Image
+import cv2
+import numpy as np
 import tempfile
-import os
+import time
+from PIL import Image
 
 # Load model
 model = YOLO("best.pt")
 
-# Page config
-st.set_page_config(
-    page_title="Helmet Detection",
-    layout="centered"
-)
+st.set_page_config(page_title="Helmet Detection Live", layout="centered")
 
-# Custom CSS (Web App Style)
-st.markdown("""
-    <style>
-    .main {
-        background-color: #f5f7fb;
-    }
-    h1 {
-        text-align: center;
-        color: #1f4e79;
-    }
-    .block-container {
-        padding-top: 2rem;
-    }
-    img {
-        border-radius: 10px;
-        box-shadow: 0px 4px 12px rgba(0,0,0,0.15);
-    }
-    </style>
-""", unsafe_allow_html=True)
+st.title("🪖 Live Helmet Detection System")
 
-st.title("🪖 Helmet Detection System")
+run = st.checkbox("Start Webcam")
 
-uploaded_file = st.file_uploader(
-    "Upload Image",
-    type=["jpg", "jpeg", "png", "webp"]
-)
+FRAME_WINDOW = st.image()
 
-if uploaded_file is not None:
+# Video writer setup
+recording = False
+out = None
 
-    # Open image
-    image = Image.open(uploaded_file).convert("RGB")
+if st.button("🎥 Start Recording"):
+    recording = True
+    fourcc = cv2.VideoWriter_fourcc(*'XVID')
+    out = cv2.VideoWriter('output.avi', fourcc, 20.0, (640, 480))
+    st.success("Recording Started...")
 
-    # Resize image (IMPORTANT for UI control)
-    image = image.resize((400, 400))
+if st.button("⏹ Stop Recording"):
+    recording = False
+    if out:
+        out.release()
+    st.warning("Recording Stopped!")
 
-    # Layout columns (like web app)
-    col1, col2 = st.columns(2)
+camera = cv2.VideoCapture(0)
 
-    with col1:
-        st.subheader("Input Image")
-        st.image(image, use_container_width=False)
+while run:
+    ret, frame = camera.read()
+    if not ret:
+        st.error("Camera not found")
+        break
 
-    # Save temp file
-    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
-    image.save(temp_file.name, format="JPEG")
+    # YOLO prediction
+    results = model(frame)
+    annotated_frame = results[0].plot()
 
-    # Prediction
-    results = model(temp_file.name)
-    result_img = results[0].plot()
+    # Convert BGR → RGB
+    image = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
 
-    # Resize output image
-    result_img = Image.fromarray(result_img)
-    result_img = result_img.resize((400, 400))
+    # Show live frame
+    FRAME_WINDOW.image(image)
 
-    with col2:
-        st.subheader("Detection Result")
-        st.image(result_img, use_container_width=False)
+    # Save recording if ON
+    if recording and out:
+        out.write(annotated_frame)
+
+    time.sleep(0.03)
+
+camera.release()
+if out:
+    out.release()
