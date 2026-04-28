@@ -7,10 +7,9 @@ import time
 from PIL import Image
 
 # Load model
-from pathlib import Path
-model_path = Path(__file__).parent / "best.pt"
-model = YOLO(str(model_path))
 
+
+model = YOLO("best.pt", task="detect")
 st.set_page_config(page_title="Helmet Detection Live", layout="centered")
 
 st.title("🪖 Live Helmet Detection System")
