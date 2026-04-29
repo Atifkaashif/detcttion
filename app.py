@@ -3,155 +3,102 @@ from ultralytics import YOLO
 from PIL import Image
 import tempfile
 import cv2
+import os
 import time
 
-# ================= LOAD MODEL =================
-model = YOLO("best.pt")
-
-# ================= PAGE CONFIG =================
+# ================= PAGE =================
 st.set_page_config(
-    page_title="Helmet Detect",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    page_title="Helmet Detection",
+    layout="wide"
 )
+
+# ================= CHECK MODEL =================
+MODEL_PATH = "best.pt"
+
+if not os.path.exists(MODEL_PATH):
+    st.error("best.pt model file missing")
+    st.stop()
+
+# ================= LOAD MODEL =================
+@st.cache_resource
+def load_model():
+    return YOLO(MODEL_PATH)
+
+model = load_model()
 
 # ================= CSS =================
 st.markdown("""
 <style>
 .stApp{
-    background:#0f1117;
-    color:white;
+background:#0f1117;
+color:white;
 }
 section[data-testid="stSidebar"]{
-    background:#111111;
-    width:280px !important;
-}
-section[data-testid="stSidebar"] *{
-    color:white !important;
-}
-.sidebar-title{
-    text-align:center;
-    font-size:28px;
-    font-weight:bold;
-}
-.sidebar-sub{
-    text-align:center;
-    color:#999;
-    margin-bottom:20px;
-}
-.metric-box{
-    background:#161616;
-    padding:15px;
-    border-radius:10px;
-    text-align:center;
-    border:1px solid #222;
-    margin-bottom:10px;
-}
-.metric-value{
-    font-size:28px;
-    font-weight:bold;
-}
-.metric-label{
-    font-size:12px;
-    color:#999;
-}
-.main-title{
-    font-size:32px;
-    color:#00c6ff;
-    font-weight:bold;
+background:#111111;
 }
 </style>
 """, unsafe_allow_html=True)
 
 # ================= SIDEBAR =================
-with st.sidebar:
+st.sidebar.title("🪖 Helmet Detect")
+page = st.sidebar.radio(
+    "Select Mode",
+    ["Image Detection", "Video Detection", "Live Camera"]
+)
 
-    st.markdown('<div class="sidebar-title">HELMET DETECT</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sidebar-sub">Safety Monitor</div>', unsafe_allow_html=True)
+# ================= TITLE =================
+st.title("🪖 Helmet Detection System")
 
-    page = st.radio(
-        "Detection Modes",
-        ["📷 Detect Image", "🎥 Process Video", "📹 Webcam"]
-    )
-
-    st.markdown("---")
-    st.markdown("### Live Stats")
-
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown("""
-        <div class="metric-box">
-        <div class="metric-value" style="color:#00ff99;">12</div>
-        <div class="metric-label">FPS</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with c2:
-        st.markdown("""
-        <div class="metric-box">
-        <div class="metric-value" style="color:#3b82f6;">183</div>
-        <div class="metric-label">Frames</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-# ================= MAIN =================
-st.markdown('<div class="main-title">🪖 Helmet & Number Plate Detection</div>', unsafe_allow_html=True)
-st.write("")
-
-# =====================================================
-# IMAGE DETECTION
-# =====================================================
-if page == "📷 Detect Image":
+# ===================================================
+# IMAGE
+# ===================================================
+if page == "Image Detection":
 
     file = st.file_uploader("Upload Image", type=["jpg","png","jpeg"])
 
     if file:
-        image = Image.open(file).convert("RGB")
 
-        col1, col2 = st.columns(2)
+        img = Image.open(file).convert("RGB")
+
+        col1,col2 = st.columns(2)
 
         with col1:
-            st.image(image, caption="Original", use_container_width=True)
+            st.image(img, caption="Original")
 
         temp = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
-        image.save(temp.name)
+        img.save(temp.name)
 
         results = model.predict(
             source=temp.name,
-            imgsz=640,
             conf=0.4,
+            imgsz=640,
             verbose=False
         )
 
         output = results[0].plot()
 
         with col2:
-            st.image(output, caption="Detected", use_container_width=True)
+            st.image(output, caption="Detected")
 
-# =====================================================
-# VIDEO DETECTION (FIXED + FAST)
-# =====================================================
-elif page == "🎥 Process Video":
+# ===================================================
+# VIDEO
+# ===================================================
+elif page == "Video Detection":
 
     file = st.file_uploader("Upload Video", type=["mp4","avi","mov"])
 
     if file:
 
-        st.success("Video Uploaded Successfully")
+        temp = tempfile.NamedTemporaryFile(delete=False)
+        temp.write(file.read())
 
-        temp_video = tempfile.NamedTemporaryFile(delete=False)
-        temp_video.write(file.read())
+        cap = cv2.VideoCapture(temp.name)
 
-        cap = cv2.VideoCapture(temp_video.name)
+        frame_box = st.empty()
+        fps_box = st.empty()
 
-        frame_area = st.empty()
-        fps_area = st.empty()
-
-        frame_count = 0
-        start_time = time.time()
-
-        # Skip frames for speed
-        skip_frames = 2
+        count = 0
+        start = time.time()
 
         while cap.isOpened():
 
@@ -160,41 +107,38 @@ elif page == "🎥 Process Video":
             if not ret:
                 break
 
-            frame_count += 1
+            count += 1
 
-            # Skip alternate frames = faster
-            if frame_count % skip_frames != 0:
+            # Skip frames for speed
+            if count % 2 != 0:
                 continue
 
-            # Resize for speed
-            frame = cv2.resize(frame, (640, 480))
+            frame = cv2.resize(frame, (640,480))
 
-            # Detection
             results = model.predict(
                 source=frame,
-                imgsz=640,
                 conf=0.4,
+                imgsz=640,
                 verbose=False
             )
 
             frame = results[0].plot()
 
-            frame_area.image(frame, channels="BGR", use_container_width=True)
+            frame_box.image(frame, channels="BGR")
 
-            # FPS
-            fps = frame_count / (time.time() - start_time)
-            fps_area.info(f"FPS: {fps:.2f}")
+            fps = count / (time.time() - start)
+            fps_box.info(f"FPS: {fps:.2f}")
 
         cap.release()
 
-# =====================================================
-# WEBCAM DETECTION (FAST)
-# =====================================================
-elif page == "📹 Webcam":
+# ===================================================
+# CAMERA
+# ===================================================
+elif page == "Live Camera":
 
     run = st.checkbox("Start Camera")
 
-    frame_window = st.image([])
+    FRAME = st.image([])
 
     cap = cv2.VideoCapture(0)
 
@@ -210,13 +154,13 @@ elif page == "📹 Webcam":
 
         results = model.predict(
             source=frame,
-            imgsz=640,
             conf=0.4,
+            imgsz=640,
             verbose=False
         )
 
         frame = results[0].plot()
 
-        frame_window.image(frame, channels="BGR")
+        FRAME.image(frame, channels="BGR")
 
     cap.release()
