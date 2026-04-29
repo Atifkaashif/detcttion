@@ -3,97 +3,186 @@ from ultralytics import YOLO
 from PIL import Image
 import tempfile
 import cv2
+import time
 
-# Load model
+# ================= LOAD MODEL =================
 model = YOLO("best.pt")
 
-# Page config
+# ================= PAGE CONFIG =================
 st.set_page_config(
-    page_title="Helmet & Number Plate Detection",
-    layout="wide"
+    page_title="Helmet Detect",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# ================= HEADER =================
+# ================= CUSTOM CSS =================
 st.markdown("""
-    <style>
-    .header {
-        background-color: #1f4e79;
-        padding: 15px;
-        text-align: center;
-        color: white;
-        font-size: 28px;
-        font-weight: bold;
-        border-radius: 10px;
-    }
-    .footer {
-        position: fixed;
-        bottom: 0;
-        width: 100%;
-        background-color: #1f4e79;
-        color: white;
-        text-align: center;
-        padding: 8px;
-    }
-    </style>
+<style>
+
+/* Main Background */
+.stApp {
+    background-color: #0f1117;
+    color: white;
+}
+
+/* Sidebar */
+section[data-testid="stSidebar"] {
+    background-color: #111111;
+    width: 280px !important;
+    border-right: 1px solid #222;
+}
+
+/* Sidebar Text */
+section[data-testid="stSidebar"] * {
+    color: white !important;
+}
+
+/* Sidebar Title */
+.sidebar-title {
+    text-align:center;
+    font-size:28px;
+    font-weight:bold;
+    margin-top:10px;
+}
+
+.sidebar-sub {
+    text-align:center;
+    color:#999;
+    font-size:13px;
+    margin-bottom:20px;
+}
+
+/* Buttons */
+.stButton>button {
+    width:100%;
+    border:none;
+    border-radius:8px;
+    padding:12px;
+    font-weight:bold;
+    color:white;
+}
+
+/* Cards */
+.metric-box {
+    background:#161616;
+    padding:18px;
+    border-radius:10px;
+    text-align:center;
+    margin-bottom:10px;
+    border:1px solid #222;
+}
+
+.metric-value {
+    font-size:30px;
+    font-weight:bold;
+}
+
+.metric-label {
+    font-size:13px;
+    color:#999;
+}
+
+.main-title{
+    font-size:32px;
+    font-weight:bold;
+    color:#00c6ff;
+}
+
+</style>
 """, unsafe_allow_html=True)
 
-st.markdown('<div class="header">🪖 Helmet & Number Plate Detection System</div>', unsafe_allow_html=True)
-
 # ================= SIDEBAR =================
-st.sidebar.title("📌 Menu")
+with st.sidebar:
 
-page = st.sidebar.radio("Select Option", [
-    "📷 Image Detection",
-    "🎥 Video Detection",
-    "📹 Live Camera"
-])
+    st.markdown('<div class="sidebar-title">HELMET DETECT</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sidebar-sub">Safety Monitor</div>', unsafe_allow_html=True)
 
-# ================= IMAGE DETECTION =================
-if page == "📷 Image Detection":
+    st.markdown("### Detection Modes")
 
-    st.subheader("Upload Image for Detection")
+    page = st.radio(
+        "",
+        ["📷 Detect Image", "🎥 Process Video", "📹 Webcam"],
+        label_visibility="collapsed"
+    )
 
-    uploaded_file = st.file_uploader("Upload Image", type=["jpg","jpeg","png"])
+    st.markdown("---")
+    st.markdown("### Live Statistics")
 
-    if uploaded_file is not None:
+    c1, c2 = st.columns(2)
+
+    with c1:
+        st.markdown("""
+        <div class="metric-box">
+            <div class="metric-value" style="color:#00ff99;">12</div>
+            <div class="metric-label">FPS</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with c2:
+        st.markdown("""
+        <div class="metric-box">
+            <div class="metric-value" style="color:#3b82f6;">183</div>
+            <div class="metric-label">Frames</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    c3, c4 = st.columns(2)
+
+    with c3:
+        st.markdown("""
+        <div class="metric-box">
+            <div class="metric-value" style="color:red;">2</div>
+            <div class="metric-label">Violations</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with c4:
+        st.markdown("""
+        <div class="metric-box">
+            <div class="metric-value" style="color:#00ff99;">98</div>
+            <div class="metric-label">Safe</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+# ================= MAIN AREA =================
+st.markdown('<div class="main-title">🪖 Helmet & Number Plate Detection System</div>', unsafe_allow_html=True)
+st.write("")
+
+# ================= IMAGE =================
+if page == "📷 Detect Image":
+
+    uploaded_file = st.file_uploader("Upload Image", type=["jpg", "png", "jpeg"])
+
+    if uploaded_file:
 
         image = Image.open(uploaded_file).convert("RGB")
-        image = image.resize((400, 400))
 
         col1, col2 = st.columns(2)
 
         with col1:
-            st.write("Input Image")
-            st.image(image)
+            st.image(image, caption="Original Image", use_container_width=True)
 
-        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
-        image.save(temp_file.name)
+        temp = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
+        image.save(temp.name)
 
-        results = model(temp_file.name)
+        results = model(temp.name)
         result_img = results[0].plot()
 
-        result_img = Image.fromarray(result_img)
-        result_img = result_img.resize((400, 400))
-
         with col2:
-            st.write("Detection Result")
-            st.image(result_img)
+            st.image(result_img, caption="Detection Result", use_container_width=True)
 
-# ================= VIDEO DETECTION =================
-elif page == "🎥 Video Detection":
+# ================= VIDEO =================
+elif page == "🎥 Process Video":
 
-    st.subheader("Upload Video")
+    video_file = st.file_uploader("Upload Video", type=["mp4", "avi", "mov"])
 
-    video_file = st.file_uploader("Upload Video", type=["mp4","avi","mov"])
-
-    if video_file is not None:
+    if video_file:
 
         tfile = tempfile.NamedTemporaryFile(delete=False)
         tfile.write(video_file.read())
 
         cap = cv2.VideoCapture(tfile.name)
-
-        stframe = st.empty()
+        frame_box = st.empty()
 
         while cap.isOpened():
             ret, frame = cap.read()
@@ -103,23 +192,22 @@ elif page == "🎥 Video Detection":
             results = model(frame)
             frame = results[0].plot()
 
-            stframe.image(frame, channels="BGR", use_container_width=True)
+            frame_box.image(frame, channels="BGR", use_container_width=True)
 
         cap.release()
 
-# ================= LIVE CAMERA =================
-elif page == "📹 Live Camera":
-
-    st.subheader("Live Webcam Detection")
+# ================= WEBCAM =================
+elif page == "📹 Webcam":
 
     run = st.checkbox("Start Camera")
 
-    FRAME_WINDOW = st.image()
+    frame_window = st.image([])
 
-    camera = cv2.VideoCapture(0)
+    cam = cv2.VideoCapture(0)
 
     while run:
-        ret, frame = camera.read()
+        ret, frame = cam.read()
+
         if not ret:
             st.error("Camera not found")
             break
@@ -127,13 +215,6 @@ elif page == "📹 Live Camera":
         results = model(frame)
         frame = results[0].plot()
 
-        FRAME_WINDOW.image(frame, channels="BGR")
+        frame_window.image(frame, channels="BGR")
 
-    camera.release()
-
-# ================= FOOTER =================
-st.markdown("""
-<div class="footer">
-    🚀 Developed for FYP | Helmet & Number Plate Detection System
-</div>
-""", unsafe_allow_html=True)
+    cam.release()
