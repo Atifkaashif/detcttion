@@ -109,28 +109,38 @@ elif page == "Video Detection":
         st.success("Video Processing Complete")
 
 # ----------------- LIVE CAMERA -----------------
+# ================= LIVE CAMERA FEED =================
 elif page == "Live Camera Feed":
-    run_cam = st.checkbox("Start Webcam")
+    st.subheader("Webcam Live Detection")
+    run_cam = st.checkbox("Turn On Camera")
+    
     FRAME_WINDOW = st.image([])
     
-    # Use 0 for default webcam
-    camera = cv2.VideoCapture(0)
-    
-    while run_cam:
-        ret, frame = camera.read()
-        if not ret:
-            st.error("Webcam access nahi ho rahi!")
-            break
+    # Session state to manage camera object
+    if run_cam:
+        # 0 index default camera ke liye hota hai
+        cap = cv2.VideoCapture(0)
+        
+        # Check if camera opened successfully
+        if not cap.isOpened():
+            st.error("Error: System camera ko access nahi kar pa raha. Check permissions.")
+        
+        while run_cam:
+            ret, frame = cap.read()
+            if not ret:
+                st.warning("Frame read nahi ho raha. Camera busy ho sakta hai.")
+                break
             
-        # Optional: Flip frame for mirror effect
-        frame = cv2.flip(frame, 1)
-        
-        # YOLO detection
-        output_frame = process_frame(frame, confidence_threshold)
-        
-        # Display
-        output_frame = cv2.cvtColor(output_frame, cv2.COLOR_BGR2RGB)
-        FRAME_WINDOW.image(output_frame)
+            # Process frame using your YOLO model
+            output_frame = process_frame(frame, confidence_threshold)
+            
+            # Convert for Streamlit display
+            output_frame = cv2.cvtColor(output_frame, cv2.COLOR_BGR2RGB)
+            FRAME_WINDOW.image(output_frame, channels="RGB")
+            
+            # Small delay to keep UI responsive
+            time.sleep(0.01)
+            
+        cap.release()
     else:
-        camera.release()
-        st.warning("Camera Stopped")
+        st.info("Camera is currently OFF.")
