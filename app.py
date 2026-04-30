@@ -5,20 +5,18 @@ import tempfile
 import cv2
 import os
 import time
-import numpy as np
 
-# ================= PAGE CONFIG =================
+# ================= PAGE =================
 st.set_page_config(
-    page_title="Helmet & Plate Detection",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    page_title="Helmet Detection",
+    layout="wide"
 )
 
 # ================= CHECK MODEL =================
 MODEL_PATH = "best.pt"
 
 if not os.path.exists(MODEL_PATH):
-    st.error("❌ best.pt file nahi mili.")
+    st.error("best.pt model file missing")
     st.stop()
 
 # ================= LOAD MODEL =================
@@ -31,119 +29,138 @@ model = load_model()
 # ================= CSS =================
 st.markdown("""
 <style>
-.main {background-color:#0e1117;}
-.stMetric {background:#161b22;padding:10px;border-radius:10px;}
+.stApp{
+background:#0f1117;
+color:white;
+}
+section[data-testid="stSidebar"]{
+background:#111111;
+}
 </style>
 """, unsafe_allow_html=True)
 
 # ================= SIDEBAR =================
-st.sidebar.title("🪖 Safety AI")
-page = st.sidebar.selectbox(
-    "Choose Mode",
-    ["Image Detection", "Video Detection", "Live Camera Feed"]
+st.sidebar.title("🪖 Helmet Detect")
+page = st.sidebar.radio(
+    "Select Mode",
+    ["Image Detection", "Video Detection", "Live Camera"]
 )
-
-confidence_threshold = st.sidebar.slider(
-    "Confidence Threshold", 0.1, 1.0, 0.4
-)
-
-# ================= FUNCTION =================
-def process_frame(frame, conf):
-    results = model.predict(frame, conf=conf, imgsz=640, verbose=False)
-    annotated = results[0].plot()
-    return annotated
 
 # ================= TITLE =================
-st.title(f"🚀 {page}")
+st.title("🪖 Helmet Detection System")
 
-# ==================================================
-# IMAGE MODE
-# ==================================================
+# ===================================================
+# IMAGE
+# ===================================================
 if page == "Image Detection":
 
-    file = st.file_uploader("Upload Image", type=["jpg", "png", "jpeg"])
+    file = st.file_uploader("Upload Image", type=["jpg","png","jpeg"])
 
     if file:
-        img = Image.open(file).convert("RGB")
-        img_np = np.array(img)
 
-        col1, col2 = st.columns(2)
+        img = Image.open(file).convert("RGB")
+
+        col1,col2 = st.columns(2)
 
         with col1:
-            st.image(img, caption="Original", use_container_width=True)
+            st.image(img, caption="Original")
+
+        temp = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
+        img.save(temp.name)
+
+        results = model.predict(
+            source=temp.name,
+            conf=0.4,
+            imgsz=640,
+            verbose=False
+        )
+
+        output = results[0].plot()
 
         with col2:
-            output = process_frame(img_np, confidence_threshold)
-            output = cv2.cvtColor(output, cv2.COLOR_BGR2RGB)
-            st.image(output, caption="Detection", use_container_width=True)
+            st.image(output, caption="Detected")
 
-# ==================================================
-# VIDEO MODE
-# ==================================================
+# ===================================================
+# VIDEO
+# ===================================================
 elif page == "Video Detection":
 
-    file = st.file_uploader("Upload Video", type=["mp4", "avi", "mov"])
+    file = st.file_uploader("Upload Video", type=["mp4","avi","mov"])
 
     if file:
-        tfile = tempfile.NamedTemporaryFile(delete=False)
-        tfile.write(file.read())
 
-        cap = cv2.VideoCapture(tfile.name)
+        temp = tempfile.NamedTemporaryFile(delete=False)
+        temp.write(file.read())
 
-        stframe = st.empty()
+        cap = cv2.VideoCapture(temp.name)
 
-        if not cap.isOpened():
-            st.error("Video open nahi ho rahi.")
-        else:
-            while True:
-                ret, frame = cap.read()
+        frame_box = st.empty()
+        fps_box = st.empty()
 
-                if not ret:
-                    break
+        count = 0
+        start = time.time()
 
-                frame = cv2.resize(frame, (900, 500))
+        while cap.isOpened():
 
-                output = process_frame(frame, confidence_threshold)
-                output = cv2.cvtColor(output, cv2.COLOR_BGR2RGB)
+            ret, frame = cap.read()
 
-                stframe.image(output, channels="RGB", use_container_width=True)
+            if not ret:
+                break
 
-            cap.release()
-            st.success("✅ Video Detection Complete")
+            count += 1
 
-# ==================================================
-# LIVE CAMERA MODE
-# ==================================================
-elif page == "Live Camera Feed":
+            # Skip frames for speed
+            if count % 2 != 0:
+                continue
 
-    st.subheader("📷 PC Camera Live Detection")
+            frame = cv2.resize(frame, (640,480))
+
+            results = model.predict(
+                source=frame,
+                conf=0.4,
+                imgsz=640,
+                verbose=False
+            )
+
+            frame = results[0].plot()
+
+            frame_box.image(frame, channels="BGR")
+
+            fps = count / (time.time() - start)
+            fps_box.info(f"FPS: {fps:.2f}")
+
+        cap.release()
+
+# ===================================================
+# CAMERA
+# ===================================================
+elif page == "Live Camera":
 
     run = st.checkbox("Start Camera")
 
-    frame_window = st.image([])
+    FRAME = st.image([])
 
-    if run:
+    cap = cv2.VideoCapture(0)
 
-        cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+    while run:
 
-        if not cap.isOpened():
-            st.error("Camera open nahi ho raha.")
-        else:
-            while run:
-                ret, frame = cap.read()
+        ret, frame = cap.read()
 
-                if not ret:
-                    st.warning("Frame receive nahi hua.")
-                    break
+        if not ret:
+            st.error("Camera not found")
+            break
 
-                output = process_frame(frame, confidence_threshold)
-                output = cv2.cvtColor(output, cv2.COLOR_BGR2RGB)
+        frame = cv2.resize(frame, (640,480))
 
-                frame_window.image(output, channels="RGB")
+        results = model.predict(
+            source=frame,
+            conf=0.4,
+            imgsz=640,
+            verbose=False
+        )
 
-                time.sleep(0.01)
+        frame = results[0].plot()
 
-            cap.release()
+        FRAME.image(frame, channels="BGR")
 
-    else:
-        st.info("Camera OFF")
+    cap.release()
